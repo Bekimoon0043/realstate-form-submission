@@ -269,6 +269,56 @@
     </div>
 
     <script>
+        async function loadPropertyData() {
+    if (!propertyId) {
+        showError();
+        return;
+    }
+
+    try {
+        console.log('Fetching property ID:', propertyId);
+        
+        const response = await fetch(n8nFetchUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                propertyId: propertyId
+            })
+        });
+
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error('Property not found');
+        }
+
+        const property = await response.json();
+        console.log('Received property data:', property); // DEBUG LINE
+        
+        displayProperty(property);
+        
+    } catch (error) {
+        console.error('Error loading property:', error);
+        showError();
+    }
+}
+
+function displayProperty(property) {
+    console.log('Displaying property:', property); // DEBUG LINE
+    
+    // Hide loading, show listing
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('listing').style.display = 'block';
+
+    // Check if we have the required data
+    if (!property.price || !property.location) {
+        console.error('Missing required property data');
+        showError();
+        return;
+    }
+}
         // Get property ID from URL
         function getParameterByName(name) {
             const url = new URL(window.location.href);
