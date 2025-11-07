@@ -76,10 +76,46 @@
             text-align: center;
             border-radius: 10px;
             cursor: pointer;
+            transition: border-color 0.3s;
         }
         
         .photo-upload:hover {
             border-color: #667eea;
+        }
+        
+        .photo-preview {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .photo-preview-item {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .photo-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .remove-photo {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(255,0,0,0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            cursor: pointer;
         }
         
         .submit-btn {
@@ -119,18 +155,38 @@
             margin-top: 20px;
         }
         
-        .photo-preview {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-            flex-wrap: wrap;
+        .error-message {
+            display: none;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 20px;
         }
         
-        .photo-preview img {
-            width: 80px;
-            height: 80px;
-            object-fit: cover;
-            border-radius: 8px;
+        .hidden {
+            display: none;
+        }
+        
+        .image-url-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .image-url-input input {
+            flex: 1;
+        }
+        
+        .add-url-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -174,6 +230,28 @@
                     <input type="text" id="contact" name="contact" placeholder="Phone number or Telegram" required>
                 </div>
                 
+                <div class="form-group">
+                    <label>📷 Property Photos</label>
+                    
+                    <!-- Option 1: File Upload -->
+                    <div class="photo-upload" onclick="document.getElementById('photos').click()">
+                        <p>Click to upload photos</p>
+                        <small>You can select multiple photos (Max 5)</small>
+                    </div>
+                    <input type="file" id="photos" name="photos" multiple accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                    
+                    <!-- Option 2: Image URL Input -->
+                    <div style="margin-top: 15px;">
+                        <label>Or add image URLs:</label>
+                        <div class="image-url-input">
+                            <input type="url" id="imageUrlInput" placeholder="https://example.com/image.jpg">
+                            <button type="button" class="add-url-btn" onclick="addImageUrl()">Add URL</button>
+                        </div>
+                    </div>
+                    
+                    <div class="photo-preview" id="photoPreview"></div>
+                </div>
+                
                 <button type="submit" class="submit-btn">Submit Property</button>
             </form>
             
@@ -185,19 +263,157 @@
                 <h3>✅ Success!</h3>
                 <p>Your property has been listed successfully.</p>
                 <p><strong>Listing URL:</strong> <span id="listingUrl"></span></p>
+                <button type="button" class="submit-btn" onclick="resetForm()" style="margin-top: 15px;">
+                    Add Another Property
+                </button>
+            </div>
+            
+            <div class="error-message" id="errorMessage">
+                <h3>❌ Error!</h3>
+                <p id="errorText">Failed to create listing. Please try again.</p>
+                <button type="button" class="submit-btn" onclick="hideError()" style="margin-top: 15px; background: #6c757d;">
+                    Try Again
+                </button>
             </div>
         </div>
     </div>
 
     <script>
-        // Telegram Web App initialization
+        // Initialize Telegram Web App
         let tg = window.Telegram.WebApp;
+        let uploadedImages = []; // This will store image URLs or base64 data
         
         // Initialize Telegram Web App
         tg.ready();
         tg.expand();
         
-        // Form submission handler
+        // File upload handling
+        function handleImageUpload(event) {
+            const files = event.target.files;
+            const preview = document.getElementById('photoPreview');
+            const maxFiles = 5;
+            
+            // Clear previous previews if we're starting over
+            if (uploadedImages.length === 0) {
+                preview.innerHTML = '';
+            }
+            
+            // Check file limit
+            if (files.length + uploadedImages.length > maxFiles) {
+                showError(`Maximum ${maxFiles} photos allowed`);
+                return;
+            }
+            
+            for (let file of files) {
+                if (uploadedImages.length >= maxFiles) break;
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    // Create preview item
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'photo-preview-item';
+                    previewItem.innerHTML = `
+                        <img src="${e.target.result}" alt="Preview">
+                        <button type="button" class="remove-photo" onclick="removeImage('${e.target.result}')">×</button>
+                    `;
+                    preview.appendChild(previewItem);
+                    
+                    // Store base64 image data
+                    uploadedImages.push({
+                        type: 'base64',
+                        data: e.target.result,
+                        name: file.name
+                    });
+                }
+                reader.readAsDataURL(file);
+            }
+            
+            // Reset file input
+            event.target.value = '';
+        }
+        
+        // Add image URL
+        function addImageUrl() {
+            const urlInput = document.getElementById('imageUrlInput');
+            const url = urlInput.value.trim();
+            const preview = document.getElementById('photoPreview');
+            const maxFiles = 5;
+            
+            if (!url) {
+                showError('Please enter a valid URL');
+                return;
+            }
+            
+            if (uploadedImages.length >= maxFiles) {
+                showError(`Maximum ${maxFiles} photos allowed`);
+                return;
+            }
+            
+            // Validate URL
+            try {
+                new URL(url);
+            } catch (e) {
+                showError('Please enter a valid URL');
+                return;
+            }
+            
+            // Create preview item
+            const previewItem = document.createElement('div');
+            previewItem.className = 'photo-preview-item';
+            previewItem.innerHTML = `
+                <img src="${url}" alt="Preview" onerror="this.style.display='none'">
+                <button type="button" class="remove-photo" onclick="removeImage('${url}')">×</button>
+            `;
+            preview.appendChild(previewItem);
+            
+            // Store URL
+            uploadedImages.push({
+                type: 'url',
+                data: url,
+                name: url.split('/').pop() || 'image.jpg'
+            });
+            
+            // Clear input
+            urlInput.value = '';
+        }
+        
+        function removeImage(imageData) {
+            // Remove from array
+            uploadedImages = uploadedImages.filter(img => img.data !== imageData);
+            
+            // Rebuild preview
+            const preview = document.getElementById('photoPreview');
+            preview.innerHTML = '';
+            
+            uploadedImages.forEach((img) => {
+                const previewItem = document.createElement('div');
+                previewItem.className = 'photo-preview-item';
+                previewItem.innerHTML = `
+                    <img src="${img.data}" alt="Preview" onerror="this.style.display='none'">
+                    <button type="button" class="remove-photo" onclick="removeImage('${img.data}')">×</button>
+                `;
+                preview.appendChild(previewItem);
+            });
+        }
+        
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').style.display = 'block';
+        }
+        
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+        
+        function resetForm() {
+            document.getElementById('propertyForm').reset();
+            document.getElementById('photoPreview').innerHTML = '';
+            uploadedImages = [];
+            document.getElementById('successMessage').style.display = 'none';
+            document.getElementById('propertyForm').style.display = 'block';
+        }
+        
+        // Form submission
         document.getElementById('propertyForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -208,6 +424,7 @@
             // Show loading, hide form
             form.style.display = 'none';
             loading.style.display = 'block';
+            hideError();
             
             // Get form data
             const formData = {
@@ -217,20 +434,21 @@
                 description: document.getElementById('description').value,
                 contact: document.getElementById('contact').value,
                 telegram_user_id: tg.initDataUnsafe?.user?.id || 'unknown',
-                telegram_username: tg.initDataUnsafe?.user?.username || 'unknown'
+                telegram_username: tg.initDataUnsafe?.user?.username || 'unknown',
+                images: uploadedImages // Include uploaded images data
             };
             
             try {
-                // REPLACE THIS WITH YOUR ACTUAL NGROK URL FROM STEP 2
+                // REPLACE THIS WITH YOUR ACTUAL n8n WEBHOOK URL
                 const n8nWebhookUrl = 'https://transcolor-alicia-nongenuine.ngrok-free.dev/webhook-test/property-submission';
                 
-                console.log('Sending data to:', n8nWebhookUrl);
-                console.log('Data:', formData);
+                console.log('Sending data to n8n...', formData);
                 
                 const response = await fetch(n8nWebhookUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify(formData)
                 });
@@ -238,7 +456,8 @@
                 console.log('Response status:', response.status);
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorText = await response.text();
+                    throw new Error(`Server error: ${response.status} - ${errorText}`);
                 }
                 
                 const result = await response.json();
@@ -249,7 +468,8 @@
                 successMessage.style.display = 'block';
                 
                 if (result.listing_url) {
-                    document.getElementById('listingUrl').textContent = result.listing_url;
+                    document.getElementById('listingUrl').innerHTML = 
+                        `<a href="${result.listing_url}" target="_blank" style="color: #155724;">${result.listing_url}</a>`;
                 }
                 
                 // Send data back to Telegram bot
@@ -257,7 +477,8 @@
                     tg.sendData(JSON.stringify({
                         action: 'property_submitted',
                         property_id: result.propertyId,
-                        success: true
+                        success: true,
+                        listing_url: result.listing_url
                     }));
                 }
                 
@@ -265,8 +486,14 @@
                 console.error('Full error:', error);
                 loading.style.display = 'none';
                 form.style.display = 'block';
-                alert('Error submitting property: ' + error.message);
+                showError('Error submitting property: ' + error.message);
             }
+        });
+        
+        // Handle Telegram Main Button if needed
+        tg.MainButton.setText("Submit Property").show();
+        tg.MainButton.onClick(function() {
+            document.getElementById('propertyForm').dispatchEvent(new Event('submit'));
         });
     </script>
 </body>
