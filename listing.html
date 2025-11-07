@@ -269,98 +269,80 @@
     </div>
 
     <script>
-        async function loadPropertyData() {
-    if (!propertyId) {
-        showError();
-        return;
-    }
-
-    try {
-        console.log('Fetching property ID:', propertyId);
-        
-        const response = await fetch(n8nFetchUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                propertyId: propertyId
-            })
-        });
-
-        console.log('Response status:', response.status);
-        
-        if (!response.ok) {
-            throw new Error('Property not found');
-        }
-
-        const property = await response.json();
-        console.log('Received property data:', property); // DEBUG LINE
-        
-        displayProperty(property);
-        
-    } catch (error) {
-        console.error('Error loading property:', error);
-        showError();
-    }
-}
-
+ 
 function displayProperty(property) {
-    console.log('Displaying property:', property); // DEBUG LINE
+    console.log('✅ Displaying property:', property);
     
-    // Hide loading, show listing
+    // Hide ALL sections first
     document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'none';
+    document.getElementById('listing').style.display = 'none';
+    
+    // Now show ONLY the listing section
     document.getElementById('listing').style.display = 'block';
 
-    // Check if we have the required data
-    if (!property.price || !property.location) {
-        console.error('Missing required property data');
-        showError();
-        return;
+    // Format price with Ethiopian Birr
+    const formattedPrice = new Intl.NumberFormat('en-ET', {
+        style: 'currency',
+        currency: 'ETB'
+    }).format(property.price || 0);
+
+    // Update DOM elements
+    document.getElementById('priceElement').textContent = formattedPrice;
+    document.getElementById('locationElement').textContent = property.location || 'Location not specified';
+    document.getElementById('locationDetailElement').textContent = property.location || 'N/A';
+    document.getElementById('bedroomsElement').textContent = property.bedrooms ? `${property.bedrooms} BR` : 'N/A';
+    document.getElementById('descriptionElement').textContent = property.description || 'No description provided.';
+    document.getElementById('agentElement').textContent = property.telegram_username || 'Agent';
+    
+    // Format date
+    if (property.timestamp) {
+        const date = new Date(property.timestamp);
+        document.getElementById('dateElement').textContent = date.toLocaleDateString('en-ET');
+    } else {
+        document.getElementById('dateElement').textContent = 'Unknown';
     }
+
+    // Setup contact methods
+    const contact = property.contact;
+    document.getElementById('contactElement').textContent = contact || 'No contact provided';
+
+    // Setup WhatsApp link
+    if (contact && (contact.includes('9') || contact.includes('+251'))) {
+        const cleanNumber = contact.replace(/\D/g, '');
+        const whatsappUrl = `https://wa.me/${cleanNumber}?text=Hello! I'm interested in your property listing: ${property.location} for ${formattedPrice}`;
+        document.getElementById('whatsappLink').href = whatsappUrl;
+        document.getElementById('whatsappLink').style.display = 'inline-flex';
+    }
+
+    // Setup Telegram link
+    if (property.telegram_username && property.telegram_username !== 'unknown') {
+        const telegramUrl = `https://t.me/${property.telegram_username}`;
+        document.getElementById('telegramLink').href = telegramUrl;
+        document.getElementById('telegramLink').style.display = 'inline-flex';
+    }
+
+    // Setup call link
+    if (contact) {
+        document.getElementById('callLink').href = `tel:${contact}`;
+        document.getElementById('callLink').style.display = 'inline-block';
+    }
+
+    // Update page title
+    document.title = `${formattedPrice} - ${property.location} - Addis Real Estate`;
 }
-        // Get property ID from URL
-        function getParameterByName(name) {
-            const url = new URL(window.location.href);
-            return url.searchParams.get(name);
-        }
 
-        const propertyId = getParameterByName('id');
-
-        // Your n8n webhook URL for fetching property data
-        // You'll need to create this endpoint in n8n
-        const n8nFetchUrl = 'https://transcolor-alicia-nongenuine.ngrok-free.dev/webhook-test/fetch-property';
-
-        async function loadPropertyData() {
-            if (!propertyId) {
-                showError();
-                return;
-            }
-
-            try {
-                const response = await fetch(n8nFetchUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        propertyId: propertyId
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error('Property not found');
-                }
-
-                const property = await response.json();
-                displayProperty(property);
-                
-            } catch (error) {
-                console.error('Error loading property:', error);
-                showError();
-            }
-        }
-
+function showError() {
+    console.log('❌ Showing error message');
+    
+    // Hide ALL sections first
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('listing').style.display = 'none';
+    document.getElementById('error').style.display = 'none';
+    
+    // Now show ONLY the error section
+    document.getElementById('error').style.display = 'block';
+}
         function displayProperty(property) {
             // Hide loading, show listing
             document.getElementById('loading').style.display = 'none';
