@@ -182,23 +182,30 @@
             margin: 10px;
             font-weight: bold;
         }
+        
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <a href="javascript:history.back()" class="back-button">← Back</a>
         
+        <!-- Loading Section - Initially Visible -->
         <div id="loading" class="loading">
             <h2>Loading Property Details...</h2>
             <p>Please wait while we fetch the property information</p>
         </div>
         
-        <div id="error" class="error" style="display: none;">
+        <!-- Error Section - Initially Hidden -->
+        <div id="error" class="error hidden">
             <h2>Property Not Found</h2>
             <p>Sorry, we couldn't find the property you're looking for.</p>
         </div>
         
-        <div id="listing" class="listing-card" style="display: none;">
+        <!-- Listing Section - Initially Hidden -->
+        <div id="listing" class="listing-card hidden">
             <div class="header">
                 <div class="price" id="priceElement">Loading...</div>
                 <div class="location" id="locationElement">Loading...</div>
@@ -253,13 +260,13 @@
                     <div id="contactElement" style="margin: 20px 0; font-size: 1.3rem; font-weight: bold;"></div>
                     
                     <div style="margin-top: 20px;">
-                        <a href="#" id="whatsappLink" class="whatsapp-button" style="display: none;">
+                        <a href="#" id="whatsappLink" class="whatsapp-button hidden">
                             💬 WhatsApp
                         </a>
-                        <a href="#" id="telegramLink" class="telegram-button" style="display: none;">
+                        <a href="#" id="telegramLink" class="telegram-button hidden">
                             ✈️ Telegram
                         </a>
-                        <a href="tel:" id="callLink" class="contact-button" style="display: none;">
+                        <a href="tel:" id="callLink" class="contact-button hidden">
                             📞 Call Now
                         </a>
                     </div>
@@ -269,89 +276,78 @@
     </div>
 
     <script>
- 
-function displayProperty(property) {
-    console.log('✅ Displaying property:', property);
-    
-    // Hide ALL sections first
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('error').style.display = 'none';
-    document.getElementById('listing').style.display = 'none';
-    
-    // Now show ONLY the listing section
-    document.getElementById('listing').style.display = 'block';
+        // Get property ID from URL
+        function getParameterByName(name) {
+            const url = new URL(window.location.href);
+            return url.searchParams.get(name);
+        }
 
-    // Format price with Ethiopian Birr
-    const formattedPrice = new Intl.NumberFormat('en-ET', {
-        style: 'currency',
-        currency: 'ETB'
-    }).format(property.price || 0);
+        // Show only one section at a time
+        function showSection(sectionId) {
+            // Hide all sections
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('listing').classList.add('hidden');
+            
+            // Show the requested section
+            document.getElementById(sectionId).classList.remove('hidden');
+        }
 
-    // Update DOM elements
-    document.getElementById('priceElement').textContent = formattedPrice;
-    document.getElementById('locationElement').textContent = property.location || 'Location not specified';
-    document.getElementById('locationDetailElement').textContent = property.location || 'N/A';
-    document.getElementById('bedroomsElement').textContent = property.bedrooms ? `${property.bedrooms} BR` : 'N/A';
-    document.getElementById('descriptionElement').textContent = property.description || 'No description provided.';
-    document.getElementById('agentElement').textContent = property.telegram_username || 'Agent';
-    
-    // Format date
-    if (property.timestamp) {
-        const date = new Date(property.timestamp);
-        document.getElementById('dateElement').textContent = date.toLocaleDateString('en-ET');
-    } else {
-        document.getElementById('dateElement').textContent = 'Unknown';
-    }
+        const propertyId = getParameterByName('id');
 
-    // Setup contact methods
-    const contact = property.contact;
-    document.getElementById('contactElement').textContent = contact || 'No contact provided';
+        // REPLACE THIS WITH YOUR ACTUAL n8n WEBHOOK URL
+        const n8nFetchUrl = 'https://transcolor-alicia-nongenuine.ngrok-free.dev/webhook-test/fetch-property';
 
-    // Setup WhatsApp link
-    if (contact && (contact.includes('9') || contact.includes('+251'))) {
-        const cleanNumber = contact.replace(/\D/g, '');
-        const whatsappUrl = `https://wa.me/${cleanNumber}?text=Hello! I'm interested in your property listing: ${property.location} for ${formattedPrice}`;
-        document.getElementById('whatsappLink').href = whatsappUrl;
-        document.getElementById('whatsappLink').style.display = 'inline-flex';
-    }
+        async function loadPropertyData() {
+            console.log('Starting to load property data...');
+            
+            if (!propertyId) {
+                console.log('No property ID found in URL');
+                showSection('error');
+                return;
+            }
 
-    // Setup Telegram link
-    if (property.telegram_username && property.telegram_username !== 'unknown') {
-        const telegramUrl = `https://t.me/${property.telegram_username}`;
-        document.getElementById('telegramLink').href = telegramUrl;
-        document.getElementById('telegramLink').style.display = 'inline-flex';
-    }
+            try {
+                console.log('Fetching property ID:', propertyId);
+                
+                const response = await fetch(n8nFetchUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        propertyId: propertyId
+                    })
+                });
 
-    // Setup call link
-    if (contact) {
-        document.getElementById('callLink').href = `tel:${contact}`;
-        document.getElementById('callLink').style.display = 'inline-block';
-    }
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
 
-    // Update page title
-    document.title = `${formattedPrice} - ${property.location} - Addis Real Estate`;
-}
+                const property = await response.json();
+                console.log('Received property data:', property);
+                
+                displayProperty(property);
+                
+            } catch (error) {
+                console.error('Error loading property:', error);
+                showSection('error');
+            }
+        }
 
-function showError() {
-    console.log('❌ Showing error message');
-    
-    // Hide ALL sections first
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('listing').style.display = 'none';
-    document.getElementById('error').style.display = 'none';
-    
-    // Now show ONLY the error section
-    document.getElementById('error').style.display = 'block';
-}
         function displayProperty(property) {
-            // Hide loading, show listing
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('listing').style.display = 'block';
+            console.log('Displaying property data');
+            
+            // Show the listing section
+            showSection('listing');
 
             // Format price with Ethiopian Birr
             const formattedPrice = new Intl.NumberFormat('en-ET', {
                 style: 'currency',
-                currency: 'ETB'
+                currency: 'ETB',
+                minimumFractionDigits: 0
             }).format(property.price || 0);
 
             // Update DOM elements
@@ -363,45 +359,64 @@ function showError() {
             document.getElementById('agentElement').textContent = property.telegram_username || 'Agent';
             
             // Format date
-            const date = new Date(property.timestamp);
-            document.getElementById('dateElement').textContent = date.toLocaleDateString('en-ET');
+            if (property.timestamp) {
+                try {
+                    const date = new Date(property.timestamp);
+                    document.getElementById('dateElement').textContent = date.toLocaleDateString('en-ET');
+                } catch (e) {
+                    document.getElementById('dateElement').textContent = 'Unknown';
+                }
+            } else {
+                document.getElementById('dateElement').textContent = 'Unknown';
+            }
 
             // Setup contact methods
-            const contact = property.contact;
-            document.getElementById('contactElement').textContent = contact;
+            const contact = property.contact ? property.contact.toString() : '';
+            document.getElementById('contactElement').textContent = contact || 'No contact provided';
+
+            // Reset contact buttons
+            document.getElementById('whatsappLink').classList.add('hidden');
+            document.getElementById('telegramLink').classList.add('hidden');
+            document.getElementById('callLink').classList.add('hidden');
 
             // Setup WhatsApp link
-            if (contact && contact.includes('9') || contact.includes('+251')) {
+            if (contact && (contact.includes('9') || contact.includes('+251'))) {
                 const cleanNumber = contact.replace(/\D/g, '');
-                const whatsappUrl = `https://wa.me/${cleanNumber}?text=Hello! I'm interested in your property listing: ${property.location} for ${formattedPrice}`;
-                document.getElementById('whatsappLink').href = whatsappUrl;
-                document.getElementById('whatsappLink').style.display = 'inline-flex';
+                // Ensure it's a valid Ethiopian number format
+                if (cleanNumber.length >= 9) {
+                    const whatsappNumber = cleanNumber.startsWith('251') ? cleanNumber : 
+                                         cleanNumber.startsWith('0') ? '251' + cleanNumber.substring(1) : 
+                                         '251' + cleanNumber;
+                    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=Hello! I'm interested in your property listing: ${encodeURIComponent(property.location)} for ${encodeURIComponent(formattedPrice)}`;
+                    document.getElementById('whatsappLink').href = whatsappUrl;
+                    document.getElementById('whatsappLink').classList.remove('hidden');
+                }
             }
 
             // Setup Telegram link
-            if (property.telegram_username && property.telegram_username !== 'unknown') {
-                const telegramUrl = `https://t.me/${property.telegram_username}`;
+            if (property.telegram_username && property.telegram_username !== 'unknown' && property.telegram_username !== 'Agent') {
+                const telegramUrl = `https://t.me/${property.telegram_username.replace('@', '')}`;
                 document.getElementById('telegramLink').href = telegramUrl;
-                document.getElementById('telegramLink').style.display = 'inline-flex';
+                document.getElementById('telegramLink').classList.remove('hidden');
             }
 
             // Setup call link
             if (contact) {
                 document.getElementById('callLink').href = `tel:${contact}`;
-                document.getElementById('callLink').style.display = 'inline-block';
+                document.getElementById('callLink').classList.remove('hidden');
             }
 
             // Update page title
-            document.title = `${formattedPrice} - ${property.location} - Addis Real Estate`;
-        }
-
-        function showError() {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('error').style.display = 'block';
+            document.title = `${property.location} - ${formattedPrice} - Addis Real Estate`;
+            
+            console.log('Property display completed successfully');
         }
 
         // Load property data when page loads
-        document.addEventListener('DOMContentLoaded', loadPropertyData);
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, starting property load...');
+            loadPropertyData();
+        });
     </script>
 </body>
 </html>
