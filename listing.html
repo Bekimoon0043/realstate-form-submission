@@ -117,13 +117,39 @@
             transform: translateY(-2px);
         }
         
-        .photos-placeholder {
-            background: #f8f9fa;
-            padding: 60px 20px;
-            text-align: center;
-            border-radius: 15px;
+        .photos-section {
             margin: 20px 0;
-            color: #666;
+        }
+        
+        .photos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .photo-item {
+            position: relative;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            aspect-ratio: 4/3;
+            background: #f8f9fa;
+        }
+        
+        .photo-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s;
+        }
+        
+        .photo-item:hover img {
+            transform: scale(1.05);
+        }
+        
+        .main-photo {
+            grid-column: span 2;
         }
         
         .loading {
@@ -186,6 +212,45 @@
         .hidden {
             display: none !important;
         }
+        
+        .photo-counter {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        
+        .no-photos {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border: 2px dashed #ddd;
+            grid-column: 1 / -1;
+        }
+        
+        @media (max-width: 768px) {
+            .main-photo {
+                grid-column: span 1;
+            }
+            
+            .photos-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .price {
+                font-size: 2rem;
+            }
+            
+            .location {
+                font-size: 1.2rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -213,10 +278,11 @@
             
             <div class="content">
                 <!-- Photos Section -->
-                <div class="photos-placeholder">
-                    <div style="font-size: 3rem; margin-bottom: 10px;">📷</div>
-                    <h3>Property Photos</h3>
-                    <p>Photos will be displayed here</p>
+                <div class="photos-section">
+                    <h3>📷 Property Photos</h3>
+                    <div id="photosContainer" class="photos-grid">
+                        <!-- Photos will be dynamically added here -->
+                    </div>
                 </div>
                 
                 <!-- Details Grid -->
@@ -314,6 +380,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify({
                         propertyId: propertyId
@@ -335,6 +402,36 @@
                 console.error('Error loading property:', error);
                 showSection('error');
             }
+        }
+
+        function displayPropertyImages(images) {
+            const photosContainer = document.getElementById('photosContainer');
+            photosContainer.innerHTML = '';
+
+            if (!images || images.length === 0) {
+                // Show placeholder if no images
+                photosContainer.innerHTML = `
+                    <div class="no-photos">
+                        <div style="font-size: 3rem; margin-bottom: 10px;">📷</div>
+                        <h3>No Photos Available</h3>
+                        <p>The agent hasn't uploaded photos for this property yet</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Display actual images
+            images.forEach((imageUrl, index) => {
+                const photoItem = document.createElement('div');
+                photoItem.className = `photo-item ${index === 0 ? 'main-photo' : ''}`;
+                
+                photoItem.innerHTML = `
+                    <img src="${imageUrl}" alt="Property photo ${index + 1}" loading="lazy" onerror="this.style.display='none'">
+                    ${images.length > 1 ? `<div class="photo-counter">${index + 1}/${images.length}</div>` : ''}
+                `;
+                
+                photosContainer.appendChild(photoItem);
+            });
         }
 
         function displayProperty(property) {
@@ -362,13 +459,32 @@
             if (property.timestamp) {
                 try {
                     const date = new Date(property.timestamp);
-                    document.getElementById('dateElement').textContent = date.toLocaleDateString('en-ET');
+                    document.getElementById('dateElement').textContent = date.toLocaleDateString('en-ET', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
                 } catch (e) {
                     document.getElementById('dateElement').textContent = 'Unknown';
                 }
             } else {
                 document.getElementById('dateElement').textContent = 'Unknown';
             }
+
+            // Handle images - BaseRow should return image URLs directly
+            let imagesToDisplay = [];
+            if (property.images && Array.isArray(property.images)) {
+                imagesToDisplay = property.images;
+            } else if (property.image_urls) {
+                imagesToDisplay = Array.isArray(property.image_urls) ? property.image_urls : [property.image_urls];
+            } else if (property.photos) {
+                imagesToDisplay = Array.isArray(property.photos) ? property.photos : [property.photos];
+            }
+            
+            // Filter out any empty or invalid image URLs
+            imagesToDisplay = imagesToDisplay.filter(url => url && url.trim() !== '');
+            
+            displayPropertyImages(imagesToDisplay);
 
             // Setup contact methods
             const contact = property.contact ? property.contact.toString() : '';
@@ -387,7 +503,8 @@
                     const whatsappNumber = cleanNumber.startsWith('251') ? cleanNumber : 
                                          cleanNumber.startsWith('0') ? '251' + cleanNumber.substring(1) : 
                                          '251' + cleanNumber;
-                    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=Hello! I'm interested in your property listing: ${encodeURIComponent(property.location)} for ${encodeURIComponent(formattedPrice)}`;
+                    const message = `Hello! I'm interested in your property listing: ${property.location} for ${formattedPrice}`;
+                    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
                     document.getElementById('whatsappLink').href = whatsappUrl;
                     document.getElementById('whatsappLink').classList.remove('hidden');
                 }
