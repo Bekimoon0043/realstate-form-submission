@@ -404,34 +404,36 @@
             }
         }
 
-        function displayPropertyImages(images) {
+        function displayPropertyImages(property) {
             const photosContainer = document.getElementById('photosContainer');
             photosContainer.innerHTML = '';
-
-            if (!images || images.length === 0) {
-                // Show placeholder if no images
-                photosContainer.innerHTML = `
-                    <div class="no-photos">
-                        <div style="font-size: 3rem; margin-bottom: 10px;">📷</div>
-                        <h3>No Photos Available</h3>
-                        <p>The agent hasn't uploaded photos for this property yet</p>
+            if (property.image_data) {
+                const mainPhoto = document.createElement('div');
+                mainPhoto.className = 'photo-item main-photo';
+                mainPhoto.innerHTML = `<img src="${property.image_data}" alt="Property photo" loading="lazy">${property.image_count > 1 ? `<div class="photo-counter">1/${property.image_count}</div>` : ''}`;
+                photosContainer.appendChild(mainPhoto);
+                if (property.image_count > 1) {
+                    for (let i = 2; i <= property.image_count; i++) {
+                        const photoItem = document.createElement('div');
+                        photoItem.className = 'photo-item';
+                        photoItem.innerHTML = `<div style="background: #f8f9fa; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666;"><div style="text-align: center;">
+                            <div style="font-size: 2rem; margin-bottom: 5px;">📷</div>
+                            <div>Photo ${i}</div>
+                        </div>
                     </div>
-                `;
-                return;
+                    <div class="photo-counter">${i}/${property.image_count}</div>`;
+                    photosContainer.appendChild(photoItem);
+                }
             }
-
-            // Display actual images
-            images.forEach((imageUrl, index) => {
-                const photoItem = document.createElement('div');
-                photoItem.className = `photo-item ${index === 0 ? 'main-photo' : ''}`;
-                
-                photoItem.innerHTML = `
-                    <img src="${imageUrl}" alt="Property photo ${index + 1}" loading="lazy" onerror="this.style.display='none'">
-                    ${images.length > 1 ? `<div class="photo-counter">${index + 1}/${images.length}</div>` : ''}
-                `;
-                
-                photosContainer.appendChild(photoItem);
-            });
+        } else {
+            // Show placeholder if no images
+            photosContainer.innerHTML = `
+                <div class="no-photos">
+                    <div style="font-size: 3rem; margin-bottom: 10px;">📷</div>
+                    <h3>No Photos Available</h3>
+                    <p>The agent hasn't uploaded photos for this property yet</p>
+                </div>`;
+            }
         }
 
         function displayProperty(property) {
