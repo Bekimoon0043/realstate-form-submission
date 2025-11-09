@@ -72,30 +72,38 @@
         
         .photo-upload {
             border: 2px dashed #e1e1e1;
-            padding: 20px;
+            padding: 30px 20px;
             text-align: center;
             border-radius: 10px;
             cursor: pointer;
             transition: border-color 0.3s;
+            background: #fafafa;
         }
         
         .photo-upload:hover {
             border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .photo-upload-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: #667eea;
         }
         
         .photo-preview {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
             gap: 10px;
-            margin-top: 10px;
-            flex-wrap: wrap;
+            margin-top: 15px;
         }
         
         .photo-preview-item {
             position: relative;
-            width: 80px;
-            height: 80px;
+            aspect-ratio: 1;
             border-radius: 8px;
             overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         .photo-preview-item img {
@@ -106,16 +114,19 @@
         
         .remove-photo {
             position: absolute;
-            top: 2px;
-            right: 2px;
-            background: rgba(255,0,0,0.7);
+            top: 5px;
+            right: 5px;
+            background: rgba(255,0,0,0.8);
             color: white;
             border: none;
             border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            font-size: 12px;
+            width: 24px;
+            height: 24px;
+            font-size: 14px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .submit-btn {
@@ -135,8 +146,10 @@
             transform: translateY(-2px);
         }
         
-        .submit-btn:active {
-            transform: translateY(0);
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
         
         .loading {
@@ -169,24 +182,19 @@
             display: none;
         }
         
-        .image-url-input {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        
-        .image-url-input input {
-            flex: 1;
-        }
-        
-        .add-url-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 20px;
+        .upload-progress {
+            margin-top: 10px;
+            background: #e9ecef;
             border-radius: 10px;
-            cursor: pointer;
-            font-weight: 600;
+            overflow: hidden;
+            height: 6px;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
         }
     </style>
 </head>
@@ -232,31 +240,33 @@
                 
                 <div class="form-group">
                     <label>📷 Property Photos</label>
-                    
-                    <!-- Option 1: File Upload -->
-                    <div class="photo-upload" onclick="document.getElementById('photos').click()">
-                        <p>Click to upload photos</p>
-                        <small>You can select multiple photos (Max 5)</small>
+                    <div class="photo-upload" id="photoUploadArea">
+                        <div class="photo-upload-icon">📸</div>
+                        <p><strong>Tap to upload photos</strong></p>
+                        <p style="font-size: 0.9rem; color: #666; margin-top: 5px;">
+                            Upload clear photos of the property<br>
+                            Maximum 5 photos • JPG, PNG supported
+                        </p>
                     </div>
-                    <input type="file" id="photos" name="photos" multiple accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                    <input type="file" id="photoInput" multiple accept="image/*" class="hidden">
                     
-                    <!-- Option 2: Image URL Input -->
-                    <div style="margin-top: 15px;">
-                        <label>Or add image URLs:</label>
-                        <div class="image-url-input">
-                            <input type="url" id="imageUrlInput" placeholder="https://example.com/image.jpg">
-                            <button type="button" class="add-url-btn" onclick="addImageUrl()">Add URL</button>
-                        </div>
+                    <div class="upload-progress hidden" id="uploadProgress">
+                        <div class="progress-bar" id="progressBar"></div>
                     </div>
                     
                     <div class="photo-preview" id="photoPreview"></div>
                 </div>
                 
-                <button type="submit" class="submit-btn">Submit Property</button>
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    Submit Property
+                </button>
             </form>
             
             <div class="loading" id="loading">
                 <p>⏳ Creating your property listing...</p>
+                <p style="font-size: 0.9rem; color: #666; margin-top: 5px;">
+                    Uploading photos and saving your property details
+                </p>
             </div>
             
             <div class="success-message" id="successMessage">
@@ -281,21 +291,36 @@
     <script>
         // Initialize Telegram Web App
         let tg = window.Telegram.WebApp;
-        let uploadedImages = []; // This will store image URLs or base64 data
+        let uploadedImages = [];
         
         // Initialize Telegram Web App
         tg.ready();
         tg.expand();
         
-        // File upload handling
-        function handleImageUpload(event) {
-            const files = event.target.files;
-            const preview = document.getElementById('photoPreview');
+        // DOM elements
+        const photoInput = document.getElementById('photoInput');
+        const photoPreview = document.getElementById('photoPreview');
+        const photoUploadArea = document.getElementById('photoUploadArea');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const progressBar = document.getElementById('progressBar');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        // Event listeners
+        photoUploadArea.addEventListener('click', () => {
+            photoInput.click();
+        });
+        
+        photoInput.addEventListener('change', handleImageUpload);
+        
+        // Image upload handling
+        async function handleImageUpload(event) {
+            const files = Array.from(event.target.files);
             const maxFiles = 5;
+            const maxFileSize = 5 * 1024 * 1024; // 5MB
             
-            // Clear previous previews if we're starting over
+            // Clear previous uploads if starting over
             if (uploadedImages.length === 0) {
-                preview.innerHTML = '';
+                photoPreview.innerHTML = '';
             }
             
             // Check file limit
@@ -304,96 +329,99 @@
                 return;
             }
             
-            for (let file of files) {
+            // Show upload progress
+            uploadProgress.classList.remove('hidden');
+            
+            for (let i = 0; i < files.length; i++) {
                 if (uploadedImages.length >= maxFiles) break;
                 
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    // Create preview item
-                    const previewItem = document.createElement('div');
-                    previewItem.className = 'photo-preview-item';
-                    previewItem.innerHTML = `
-                        <img src="${e.target.result}" alt="Preview">
-                        <button type="button" class="remove-photo" onclick="removeImage('${e.target.result}')">×</button>
-                    `;
-                    preview.appendChild(previewItem);
-                    
-                    // Store base64 image data
-                    uploadedImages.push({
-                        type: 'base64',
-                        data: e.target.result,
-                        name: file.name
-                    });
+                const file = files[i];
+                
+                // Check file size
+                if (file.size > maxFileSize) {
+                    showError(`File "${file.name}" is too large. Maximum size is 5MB.`);
+                    continue;
                 }
-                reader.readAsDataURL(file);
+                
+                // Check file type
+                if (!file.type.startsWith('image/')) {
+                    showError(`File "${file.name}" is not an image.`);
+                    continue;
+                }
+                
+                // Update progress
+                updateProgress((i / files.length) * 100);
+                
+                try {
+                    // Convert image to base64 for upload
+                    const base64Data = await convertToBase64(file);
+                    
+                    // Create preview
+                    createPreview(base64Data, file.name);
+                    
+                    // Store image data
+                    uploadedImages.push({
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        data: base64Data,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                } catch (error) {
+                    console.error('Error processing image:', error);
+                    showError(`Error processing "${file.name}"`);
+                }
             }
+            
+            // Hide progress bar
+            uploadProgress.classList.add('hidden');
+            progressBar.style.width = '0%';
             
             // Reset file input
             event.target.value = '';
+            
+            // Update submit button state
+            updateSubmitButton();
         }
         
-        // Add image URL
-        function addImageUrl() {
-            const urlInput = document.getElementById('imageUrlInput');
-            const url = urlInput.value.trim();
-            const preview = document.getElementById('photoPreview');
-            const maxFiles = 5;
-            
-            if (!url) {
-                showError('Please enter a valid URL');
-                return;
-            }
-            
-            if (uploadedImages.length >= maxFiles) {
-                showError(`Maximum ${maxFiles} photos allowed`);
-                return;
-            }
-            
-            // Validate URL
-            try {
-                new URL(url);
-            } catch (e) {
-                showError('Please enter a valid URL');
-                return;
-            }
-            
-            // Create preview item
+        function convertToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+        
+        function createPreview(imageData, fileName) {
             const previewItem = document.createElement('div');
             previewItem.className = 'photo-preview-item';
             previewItem.innerHTML = `
-                <img src="${url}" alt="Preview" onerror="this.style.display='none'">
-                <button type="button" class="remove-photo" onclick="removeImage('${url}')">×</button>
+                <img src="${imageData}" alt="Preview" loading="lazy">
+                <button type="button" class="remove-photo" onclick="removePreview(this, '${imageData}')">×</button>
             `;
-            preview.appendChild(previewItem);
-            
-            // Store URL
-            uploadedImages.push({
-                type: 'url',
-                data: url,
-                name: url.split('/').pop() || 'image.jpg'
-            });
-            
-            // Clear input
-            urlInput.value = '';
+            photoPreview.appendChild(previewItem);
         }
         
-        function removeImage(imageData) {
-            // Remove from array
+        function removePreview(button, imageData) {
+            const previewItem = button.parentElement;
+            previewItem.remove();
+            
+            // Remove from uploadedImages array
             uploadedImages = uploadedImages.filter(img => img.data !== imageData);
             
-            // Rebuild preview
-            const preview = document.getElementById('photoPreview');
-            preview.innerHTML = '';
-            
-            uploadedImages.forEach((img) => {
-                const previewItem = document.createElement('div');
-                previewItem.className = 'photo-preview-item';
-                previewItem.innerHTML = `
-                    <img src="${img.data}" alt="Preview" onerror="this.style.display='none'">
-                    <button type="button" class="remove-photo" onclick="removeImage('${img.data}')">×</button>
-                `;
-                preview.appendChild(previewItem);
-            });
+            // Update submit button state
+            updateSubmitButton();
+        }
+        
+        function updateProgress(percent) {
+            progressBar.style.width = percent + '%';
+        }
+        
+        function updateSubmitButton() {
+            // Enable submit button only if we have at least one image
+            submitBtn.disabled = uploadedImages.length === 0;
         }
         
         function showError(message) {
@@ -411,6 +439,8 @@
             uploadedImages = [];
             document.getElementById('successMessage').style.display = 'none';
             document.getElementById('propertyForm').style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+            updateSubmitButton();
         }
         
         // Form submission
@@ -435,14 +465,17 @@
                 contact: document.getElementById('contact').value,
                 telegram_user_id: tg.initDataUnsafe?.user?.id || 'unknown',
                 telegram_username: tg.initDataUnsafe?.user?.username || 'unknown',
-                images: uploadedImages // Include uploaded images data
+                images: uploadedImages // Include uploaded images with base64 data
             };
             
             try {
                 // REPLACE THIS WITH YOUR ACTUAL n8n WEBHOOK URL
                 const n8nWebhookUrl = 'https://transcolor-alicia-nongenuine.ngrok-free.dev/webhook-test/property-submission';
                 
-                console.log('Sending data to n8n...', formData);
+                console.log('Sending data to n8n...', {
+                    ...formData,
+                    images: `Array of ${formData.images.length} images`
+                });
                 
                 const response = await fetch(n8nWebhookUrl, {
                     method: 'POST',
@@ -495,6 +528,9 @@
         tg.MainButton.onClick(function() {
             document.getElementById('propertyForm').dispatchEvent(new Event('submit'));
         });
+        
+        // Initialize submit button state
+        updateSubmitButton();
     </script>
 </body>
 </html>
